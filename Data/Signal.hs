@@ -1,12 +1,18 @@
 module Data.Signal(
+    -- data types
     Rate, Amplitude, Frecuency, Phase, Time, Signal(..),
+    -- make waves
     sineWave, squareWave, triangleWave, sawWave,
-    takeZero, mapSignal, time, decay,
+    -- combinators
+    mapSamples, mapSignal, time, decay,
+    -- common sample rates
     ctrRate, audRate,
+    -- notes
     zero,
     c, d, e, f, g, a, b,
     csharp, dsharp, fsharp, gsharp, asharp,
     dflat, eflat, gflat, aflat, bflat,
+    -- format
     toWave
 ) where
 
@@ -51,6 +57,14 @@ instance Semigroup Signal where
 instance Monoid Signal where
     mempty = Signal (\_rate -> [])
     mappend = (<>)
+
+instance Num Signal where
+    (Signal f) + (Signal g) = Signal (\rate -> zipWaves (+) (f rate) (g rate))
+    (Signal f) - (Signal g) = Signal (\rate -> zipWaves (-) (f rate) (g rate))
+    (Signal f) * (Signal g) = Signal (\rate -> zipWaves (*) (f rate) (g rate))
+    abs (Signal f) = Signal ((map abs) . f)
+    signum (Signal f) = Signal ((map signum) . f)
+    fromInteger n = Signal (\rate -> repeat (fromIntegral n))
 
 
 -- | MAKE SIGNALS
@@ -111,15 +125,6 @@ sawWave a phi f = Signal (\rate ->
 
 
 -- | SIGNAL COMBINATORS
-
--- | takeZero
-takeZero :: Int -> [Double] -> [Double]
-takeZero n xs = take (takeZero' n (drop n xs)) xs
-    where takeZero' n [] = n
-          takeZero' n [_] = n
-          takeZero' n (a:b:xs) = if a == 0 || signum a /= signum b
-                                 then n+1
-                                 else takeZero' (n+1) (b:xs)
 
 -- | mapSamples
 -- Map the samples of the signal.
@@ -208,3 +213,22 @@ toWave rate (Signal f) = let samples = f rate
                              header = WAVEHeader 1 rate 32 (Just $ length samples)
                              body = map (pure . doubleToSample) samples
                          in WAVE header body
+
+
+-- | AUXILIAR OPERATIONS (DO NOT EXPORT)
+
+-- | zipWaves
+zipWaves :: (Double -> Double -> Double) -> [Double] -> [Double] -> [Double]
+zipWaves f [] [] = []
+zipWaves f [] (y:ys) = f 0 y : zipWaves f [] ys
+zipWaves f (x:xs) [] = f x 0 : zipWaves f xs []
+zipWaves f (x:xs) (y:ys) = f x y : zipWaves f xs ys
+
+-- | takeZero
+takeZero :: Int -> [Double] -> [Double]
+takeZero n xs = take (takeZero' n (drop n xs)) xs
+    where takeZero' n [] = n
+          takeZero' n [_] = n
+          takeZero' n (a:b:xs) = if a == 0 || signum a /= signum b
+                                 then n+1
+                                 else takeZero' (n+1) (b:xs)
