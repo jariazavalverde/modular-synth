@@ -1,7 +1,7 @@
 module Data.Signal(
-    Rate, Amplitude, Frecuency, Phase, Time, Signal,
-    sinusoid,
-    smap, sjoin, stime,
+    Rate, Amplitude, Frecuency, Phase, Time, Signal(..),
+    sineWave,
+    mapSamples, mapSignal, time,
     ctrRate, audRate,
     zero,
     c, d, e, f, g, a, b,
@@ -11,6 +11,7 @@ module Data.Signal(
 ) where
 
 
+import Data.Semigroup(Semigroup(..))
 import Data.Function((&))
 import Data.WAVE(doubleToSample, WAVE(..), WAVEHeader(..))
 
@@ -42,46 +43,51 @@ type Phase = Double
 type Time = Double
 
 -- | Signal
-data Signal = Signal {
-    getRate :: Rate,
-    getSamples ::  [Double]
-} deriving (Show, Eq)
+data Signal = Signal { runSignal :: Rate -> [Double] }
+
+instance Semigroup Signal where
+    (Signal f) <> (Signal g) = Signal (\rate -> f rate ++ g rate)
+ 
+instance Monoid Signal where
+    mempty = Signal (\_rate -> [])
+    mappend = (<>)
 
 
 -- | MAKE SIGNALS
 
--- | sinusoid
-sinusoid :: Rate -> Amplitude -> Phase -> Frecuency -> Signal
-sinusoid rate a phi f = let w = 2*pi*f
-                            rate' = fromIntegral rate
-                        in Signal rate $ cycle (map (\t -> a * sin (w*(t/rate') + phi)) [0..fromIntegral rate])
-
+-- | sineWave
+sineWave :: Amplitude -> Phase -> Frecuency -> Signal
+sineWave a phi f = Signal (\rate ->
+    cycle (map (\t -> a * sin (2*pi*f*(t/(fromIntegral rate)) + phi)) [0..fromIntegral rate]))
+              
 
 -- | SIGNAL COMBINATORS
 
--- | smap
+-- | mapSamples
 -- Map the samples of the signal.
-smap :: (Double -> Double) -> Signal -> Signal
-smap f (Signal rate samples) = Signal rate (map f samples)
+mapSamples :: ([Double] -> [Double]) -> Signal -> Signal
+mapSamples g (Signal f) = Signal (g . f)
 
--- | sjoin
--- Join a list of signals into an only one signal.
-sjoin :: Rate -> [Signal] -> Signal
-sjoin rate xs = Signal rate (concat $ map getSamples xs)
+-- | mapSignal
+-- Map the function of the signal.
+mapSignal :: (Rate -> [Double] -> [Double]) -> Signal -> Signal
+mapSignal g (Signal f) = Signal (\rate -> g rate (f rate))
 
--- | stime
+-- | time
 -- Take the first n seconds of a signal.
-stime :: Time -> Signal -> Signal
-stime t (Signal rate samples) = Signal rate $ take (round (t*fromIntegral rate)) samples
+time :: Time -> Signal -> Signal
+time t = mapSignal (\rate -> take (round (t * fromIntegral rate)))
 
 
 -- | COMMON RATES
 
--- | ctrRate (4410 Hz)
+-- | ctrRate
+-- 4410 Hz.
 ctrRate :: Rate
 ctrRate = 4410
 
--- | audRate (44100 Hz)
+-- | audRate
+-- 44100 Hz.
 -- In digital audio, 44100 Hz is a common sampling frequency. Analog audio is
 -- recorded by sampling it 44100 times per second, and then these samples are
 -- used to reconstruct the audio signal when playing it back. 
@@ -103,8 +109,8 @@ c = (&) 261.63
 d = (&) 293.66
 e = (&) 329.63
 f = (&) 349.23
-g = (&) 392.0
-a = (&) 440.0
+g = (&) 392.00
+a = (&) 440.00
 b = (&) 493.88
 
 csharp, dsharp, fsharp, gsharp, asharp :: (Frecuency -> Signal) -> Signal
@@ -122,7 +128,7 @@ aflat = (&) 415.30
 bflat = (&) 466.16
 
 
--- | DATA REPRESENTATION AND EXPORT FUNCTIONS
+-- | FORMAT AND EXPORT FUNCTIONS
 
 -- | toWave
 -- Generate a wave from a signal, that can be stored as a .wav file by the WAVE
@@ -130,7 +136,8 @@ bflat = (&) 466.16
 --
 -- $ cabal install WAVE
 --
-toWave :: Signal -> WAVE
-toWave (Signal rate samples) = let header = WAVEHeader 1 rate 32 (Just $ length samples)
-                                   body = map ((:[]).doubleToSample) samples
-                               in WAVE header body
+toWave :: Rate -> Signal -> WAVE
+toWave rate (Signal f) = let samples = f rate
+                             header = WAVEHeader 1 rate 32 (Just $ length samples)
+                             body = map (pure . doubleToSample) samples
+                         in WAVE header body
