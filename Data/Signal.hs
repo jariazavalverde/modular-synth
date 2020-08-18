@@ -1,7 +1,7 @@
 module Data.Signal(
     Rate, Amplitude, Frecuency, Phase, Time, Signal(..),
     sineWave, squareWave,
-    mapSamples, mapSignal, time,
+    takeZero, mapSignal, time, decay,
     ctrRate, audRate,
     zero,
     c, d, e, f, g, a, b,
@@ -40,6 +40,7 @@ type Frecuency = Double
 type Phase = Double
 
 -- | Time
+type Seconds = Double
 type Time = Double
 
 -- | Signal
@@ -47,7 +48,7 @@ data Signal = Signal { runSignal :: Rate -> [Double] }
 
 instance Semigroup Signal where
     (Signal f) <> (Signal g) = Signal (\rate -> f rate ++ g rate)
- 
+
 instance Monoid Signal where
     mempty = Signal (\_rate -> [])
     mappend = (<>)
@@ -65,7 +66,8 @@ instance Monoid Signal where
 -- where A is the amplitude, f is the frecuency and phi is the phase.
 sineWave :: Amplitude -> Phase -> Frecuency -> Signal
 sineWave a phi f = Signal (\rate ->
-    cycle (map (\t -> a * sin (2*pi*f*(t/(fromIntegral rate)) + phi)) [0..fromIntegral rate]))
+    let rate' = fromIntegral rate
+    in map (\t -> a * sin (2*pi*f*(t/rate') + phi)) [0..])
 
 -- | squareWave
 -- A square wave is a non-sinusoidal periodic waveform in which the amplitude
@@ -78,10 +80,19 @@ sineWave a phi f = Signal (\rate ->
 -- where A is the amplitude, f is the frecuency and phi is the phase.
 squareWave :: Amplitude -> Phase -> Frecuency -> Signal
 squareWave a phi f = Signal (\rate ->
-    cycle (map (\t -> a * signum (sin (2*pi*f*(t/(fromIntegral rate)) + phi))) [0..fromIntegral rate]))
+    let rate' = fromIntegral rate
+    in map (\t -> a * signum (sin (2*pi*f*(t/rate') + phi))) [0..])
               
 
 -- | SIGNAL COMBINATORS
+
+takeZero :: Int -> [Double] -> [Double]
+takeZero n xs = take (takeZero' n (drop n xs)) xs
+    where takeZero' n [] = n
+          takeZero' n [_] = n
+          takeZero' n (a:b:xs) = if a == 0 || signum a /= signum b
+                                 then n+1
+                                 else takeZero' (n+1) (b:xs)
 
 -- | mapSamples
 -- Map the samples of the signal.
@@ -95,8 +106,17 @@ mapSignal g (Signal f) = Signal (\rate -> g rate (f rate))
 
 -- | time
 -- Take the first n seconds of a signal.
-time :: Time -> Signal -> Signal
-time t = mapSignal (\rate -> take (round (t * fromIntegral rate)))
+time :: Seconds -> Signal -> Signal
+time t = mapSignal (\rate -> takeZero (round (t * fromIntegral rate)))
+
+-- | decay
+-- Decay the signal the last n seconds.
+decay :: Seconds -> Signal -> Signal
+decay t (Signal f) = Signal (\rate ->
+    let xs = f rate
+        m = round (t * fromIntegral rate)
+        n = length xs - m
+    in take n xs ++ zipWith (*) [1, 1-1/(fromIntegral m)..] (drop n xs))
 
 
 -- | COMMON RATES
