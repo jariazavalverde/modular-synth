@@ -1,6 +1,6 @@
 module Data.Signal(
     Rate, Amplitude, Frecuency, Phase, Time, Signal(..),
-    sineWave,
+    sineWave, squareWave,
     mapSamples, mapSignal, time,
     ctrRate, audRate,
     zero,
@@ -34,7 +34,7 @@ type Amplitude = Double
 -- timbre.
 type Frecuency = Double
 
--- | Phase (in degrees)
+-- | Phase (in radians)
 -- The phase of a periodic function of some real variable (such as time) is an
 -- angle representing the number of periods spanned by that variable.
 type Phase = Double
@@ -56,9 +56,29 @@ instance Monoid Signal where
 -- | MAKE SIGNALS
 
 -- | sineWave
+-- A sine wave or sinusoid is a mathematical curve that describes a smooth
+-- periodic oscillation. A sine wave is a continuous wave.
+-- Its form as a function of time t is: 
+--
+-- y(t) = A * sin(2*pi*f*t + phi)
+--
+-- where A is the amplitude, f is the frecuency and phi is the phase.
 sineWave :: Amplitude -> Phase -> Frecuency -> Signal
 sineWave a phi f = Signal (\rate ->
     cycle (map (\t -> a * sin (2*pi*f*(t/(fromIntegral rate)) + phi)) [0..fromIntegral rate]))
+
+-- | squareWave
+-- A square wave is a non-sinusoidal periodic waveform in which the amplitude
+-- alternates at a steady frequency between fixed minimum and maximum values,
+-- with the same duration at minimum and maximum.
+-- Its form as a function of time t is: 
+--
+-- y(t) = A * sgn(sin(2*pi*f*t + phi))
+--
+-- where A is the amplitude, f is the frecuency and phi is the phase.
+squareWave :: Amplitude -> Phase -> Frecuency -> Signal
+squareWave a phi f = Signal (\rate ->
+    cycle (map (\t -> a * signum (sin (2*pi*f*(t/(fromIntegral rate)) + phi))) [0..fromIntegral rate]))
               
 
 -- | SIGNAL COMBINATORS
