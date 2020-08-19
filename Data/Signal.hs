@@ -4,7 +4,7 @@ module Data.Signal(
     -- make waves
     sineWave, squareWave, triangleWave, sawWave,
     -- combinators
-    mapSamples, mapSignal, time, decay,
+    mapSignal, zipSignal, time, decay,
     -- common sample rates
     ctrRate, audRate,
     -- notes
@@ -17,6 +17,7 @@ module Data.Signal(
 ) where
 
 
+import Control.Applicative(liftA2)
 import Data.Semigroup(Semigroup(..))
 import Data.Function((&))
 import Data.WAVE(doubleToSample, WAVE(..), WAVEHeader(..))
@@ -49,21 +50,28 @@ type Phase = Double
 type Time = Double
 
 -- | Signal
-data Signal = Signal { runSignal :: Rate -> [Double] }
+data Signal a = Signal { runSignal :: Rate -> [a] }
 
-instance Semigroup Signal where
+instance Functor Signal where
+    fmap g (Signal f) = Signal ((map g) . f)
+
+instance Applicative Signal where
+    pure x = Signal (\_rate -> repeat x)
+    (Signal f) <*> (Signal g) = Signal (\rate -> zipWith ($) (f rate) (g rate))
+
+instance Semigroup (Signal a) where
     (Signal f) <> (Signal g) = Signal (\rate -> f rate ++ g rate)
 
-instance Monoid Signal where
+instance Monoid (Signal a) where
     mempty = Signal (\_rate -> [])
     mappend = (<>)
 
-instance Num Signal where
-    (Signal f) + (Signal g) = Signal (\rate -> zipWaves (+) (f rate) (g rate))
-    (Signal f) - (Signal g) = Signal (\rate -> zipWaves (-) (f rate) (g rate))
-    (Signal f) * (Signal g) = Signal (\rate -> zipWaves (*) (f rate) (g rate))
-    abs (Signal f) = Signal ((map abs) . f)
-    signum (Signal f) = Signal ((map signum) . f)
+instance Num a => Num (Signal a) where
+    (+) = liftA2 (+)
+    (-) = liftA2 (-)
+    (*) = liftA2 (*)
+    abs = fmap abs
+    signum = fmap signum
     fromInteger n = Signal (\rate -> repeat (fromIntegral n))
 
 
@@ -77,7 +85,7 @@ instance Num Signal where
 -- y(t) = A * sin(2*pi*f*t + phi)
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-sineWave :: Amplitude -> Phase -> Frecuency -> Signal
+sineWave :: Amplitude -> Phase -> Frecuency -> Signal Double
 sineWave a phi f = Signal (\rate ->
     let rate' = fromIntegral rate
     in map (\t -> a * sin (2*pi*f*(t/rate') + phi)) [0..])
@@ -91,7 +99,7 @@ sineWave a phi f = Signal (\rate ->
 -- y(t) = A * sgn(sin(2*pi*f*t + phi))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-squareWave :: Amplitude -> Phase -> Frecuency -> Signal
+squareWave :: Amplitude -> Phase -> Frecuency -> Signal Double
 squareWave a phi f = Signal (\rate ->
     let rate' = fromIntegral rate
     in map (\t -> a * signum (sin (2*pi*f*(t/rate') + phi))) [0..])
@@ -104,7 +112,7 @@ squareWave a phi f = Signal (\rate ->
 -- y(t) = 2*A / pi * asin(sin(2*pi*f*t + phi))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-triangleWave :: Amplitude -> Phase -> Frecuency -> Signal
+triangleWave :: Amplitude -> Phase -> Frecuency -> Signal Double
 triangleWave a phi f = Signal (\rate ->
     let rate' = fromIntegral rate
     in map (\t -> (2*a / pi) * asin (sin (2*pi*f*(t/rate') + phi))) [0..])
@@ -118,7 +126,7 @@ triangleWave a phi f = Signal (\rate ->
 -- y(t) = -2*A * ((t+phi)*f - floor(0.5+(t+phi)*f))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-sawWave :: Amplitude -> Phase -> Frecuency -> Signal
+sawWave :: Amplitude -> Phase -> Frecuency -> Signal Double
 sawWave a phi f = Signal (\rate ->
     let rate' = fromIntegral rate
     in map (\t -> 2 * a * (((t+phi)/rate')*f - fromIntegral(floor (0.5 + ((t+phi)/rate')*f)))) [0..])
@@ -126,24 +134,19 @@ sawWave a phi f = Signal (\rate ->
 
 -- | SIGNAL COMBINATORS
 
--- | mapSamples
--- Map the samples of the signal.
-mapSamples :: ([Double] -> [Double]) -> Signal -> Signal
-mapSamples g (Signal f) = Signal (g . f)
-
 -- | mapSignal
 -- Map the function of the signal.
-mapSignal :: (Rate -> [Double] -> [Double]) -> Signal -> Signal
+mapSignal :: (Rate -> [a] -> [b]) -> Signal a -> Signal b
 mapSignal g (Signal f) = Signal (\rate -> g rate (f rate))
 
 -- | time
 -- Take the first n seconds of a signal.
-time :: Time -> Signal -> Signal
+time :: (Eq a, Num a) => Time -> Signal a -> Signal a
 time t = mapSignal (\rate -> takeZero (round (t * fromIntegral rate)))
 
 -- | decay
 -- Decay the signal the last n seconds.
-decay :: Time -> Signal -> Signal
+decay :: (Num a, Enum a, Fractional a) => Time -> Signal a -> Signal a
 decay t (Signal f) = Signal (\rate ->
     let xs = f rate
         m = round (t * fromIntegral rate)
@@ -172,11 +175,11 @@ audRate = 44100
 -- Notes can represent the pitch and duration of a sound in musical notation.
 
 -- | Empty sound.
-zero :: (Frecuency -> Signal) -> Signal
+zero :: (Frecuency -> Signal a) -> Signal a
 zero = (&) 0
 
 -- | 12 notes of a chromatic scale built on C.
-c, d, e, f, g, a, b :: (Frecuency -> Signal) -> Signal
+c, d, e, f, g, a, b :: (Frecuency -> Signal a) -> Signal a
 c = (&) 261.63
 d = (&) 293.66
 e = (&) 329.63
@@ -185,14 +188,14 @@ g = (&) 392.00
 a = (&) 440.00
 b = (&) 493.88
 
-csharp, dsharp, fsharp, gsharp, asharp :: (Frecuency -> Signal) -> Signal
+csharp, dsharp, fsharp, gsharp, asharp :: (Frecuency -> Signal a) -> Signal a
 csharp = (&) 277.18
 dsharp = (&) 311.13
 fsharp = (&) 369.99
 gsharp = (&) 415.30
 asharp = (&) 466.16
 
-dflat, eflat, gflat, aflat, bflat :: (Frecuency -> Signal) -> Signal
+dflat, eflat, gflat, aflat, bflat :: (Frecuency -> Signal a) -> Signal a
 dflat = (&) 277.18
 eflat = (&) 311.13
 gflat = (&) 369.99
@@ -208,7 +211,7 @@ bflat = (&) 466.16
 --
 -- $ cabal install WAVE
 --
-toWave :: Rate -> Signal -> WAVE
+toWave :: Rate -> Signal Double -> WAVE
 toWave rate (Signal f) = let samples = f rate
                              header = WAVEHeader 1 rate 32 (Just $ length samples)
                              body = map (pure . doubleToSample) samples
@@ -217,15 +220,8 @@ toWave rate (Signal f) = let samples = f rate
 
 -- | AUXILIAR OPERATIONS (DO NOT EXPORT)
 
--- | zipWaves
-zipWaves :: (Double -> Double -> Double) -> [Double] -> [Double] -> [Double]
-zipWaves f [] [] = []
-zipWaves f [] (y:ys) = f 0 y : zipWaves f [] ys
-zipWaves f (x:xs) [] = f x 0 : zipWaves f xs []
-zipWaves f (x:xs) (y:ys) = f x y : zipWaves f xs ys
-
 -- | takeZero
-takeZero :: Int -> [Double] -> [Double]
+takeZero :: (Eq a, Num a) => Int -> [a] -> [a]
 takeZero n xs = take (takeZero' n (drop n xs)) xs
     where takeZero' n [] = n
           takeZero' n [_] = n
