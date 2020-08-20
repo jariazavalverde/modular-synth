@@ -17,10 +17,14 @@ module Data.Note(
 ) where
 
 
-import Data.Signal(Frecuency, Signal(..), Phase, time, time', (+>))
+import Data.Signal(Signal(..), Frecuency, Phase, time, time', (+>))
 
 
 -- | DATA TYPES
+
+-- | Tempo (in bpm)
+-- The tempo is the speed or pace of a given piece.
+type Tempo = Int
 
 -- | NoteValue
 -- A note value indicates the relative duration of a note.
@@ -33,11 +37,7 @@ data Note = Note NoteValue Frecuency
           | Dotted Int Note
           | Duplet Note Note
           | Triplet Note Note Note
-    deriving (Read, Show)
-
--- | Tempo (in bpm)
--- The tempo is the speed or pace of a given piece.
-type Tempo = Int
+    deriving (Read, Show, Eq, Ord)
 
 
 -- | OPERATIONS
