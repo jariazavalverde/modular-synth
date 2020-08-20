@@ -4,7 +4,7 @@ module Data.Signal(
     -- make waves
     sineWave, squareWave, triangleWave, sawWave,
     -- combinators
-    time, time', decay, gain, (+>),
+    time, time', decay, gain, (+>), join,
     -- common sample rates
     ctrRate, audRate,
     -- format
@@ -174,6 +174,10 @@ infixl 1 +>
         Signal h = g (b, compare a b)
     in xs ++ h rate)
 
+join :: (Ord a, Num a) => [Phase a -> Signal a] -> (Phase a -> Signal a)
+join [] _ = mempty
+join (x:xs) phi = x phi +> join xs
+
 
 -- | COMMON RATES
 
@@ -210,7 +214,7 @@ toWave rate (Signal f) = let samples = f rate
 
 -- | dropSamples
 dropSamples :: (Eq a, Ord a) => Phase a -> [a] -> [a]
-dropSamples (phi,ord) (x:y:xs) = case ord of
+dropSamples (phi,ord) (x:y:xs) = if x == y then xs else case ord of
     LT -> if x <= phi && y > phi then y:xs else dropSamples (phi,ord) (y:xs)
     GT -> if x > phi && y <= phi then y:xs else dropSamples (phi,ord) (y:xs)
     EQ -> if x == phi || x < phi && y > phi || x > phi && y < phi

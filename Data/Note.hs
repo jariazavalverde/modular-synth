@@ -5,6 +5,7 @@ module Data.Note(
     noteToSignal,
     -- common note pitches
     c, d, e, f, g, a, b,
+    c',
     csharp, dsharp, fsharp, gsharp, asharp,
     dflat, eflat, gflat, aflat, bflat,
     -- common note values
@@ -13,7 +14,7 @@ module Data.Note(
     demisemiquaver, sixtyFourth, hemidemisemiquaver, semidemisemiquaver,
     hundredTwentyEighth, semihemidemisemiquaver, quasihemidemisemiquaver,
     twoHundredFiftySixth, demisemihemidemisemiquaver,
-    duplet, triplet
+    dotted, duplet, triplet
 ) where
 
 
@@ -72,6 +73,9 @@ f = 349.23
 g = 392.00
 a = 440.00
 b = 493.88
+
+c' :: Frecuency
+c' = 523.251
 
 csharp, dsharp, fsharp, gsharp, asharp :: Frecuency
 csharp = 277.18
@@ -145,6 +149,9 @@ n256, twoHundredFiftySixth, demisemihemidemisemiquaver :: Frecuency -> Note
 n256 = Note (1/256)
 twoHundredFiftySixth = Note (1/256)
 demisemihemidemisemiquaver = Note (1/256)
+
+dotted :: Int -> Note -> Note
+dotted = Dotted
 
 -- | Extra-metric groupings
 duplet :: (Frecuency -> Note) -> Frecuency -> Frecuency -> Note

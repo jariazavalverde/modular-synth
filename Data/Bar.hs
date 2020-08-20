@@ -2,7 +2,7 @@ module Data.Bar(
     -- data types
     Bar(..),
     -- operators
-    barToSignal, twice
+    barToSignals, twice
 ) where
 
 
@@ -29,10 +29,10 @@ type Bar = [Note]
 -- | barToSignal
 -- Given the tempo (in bps) and a signal constructor, generates a signal from
 -- a bar.
-barToSignal :: Bar -> Tempo -> (Frecuency -> Phase Double -> Signal Double)
-    -> Phase Double -> Signal Double
-barToSignal [] _ _ _ = mempty
-barToSignal (x:xs) t u phi = noteToSignal x t u phi +> barToSignal xs t u
+barToSignals :: Bar -> Tempo -> (Frecuency -> Phase Double -> Signal Double)
+    -> [Phase Double -> Signal Double]
+barToSignals [] _ _ = []
+barToSignals (x:xs) t u = noteToSignal x t u : barToSignals xs t u
 
 -- | twice
 -- Repeat a list of bars two times.
