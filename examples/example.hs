@@ -4,11 +4,8 @@ import Data.Note
 
 example :: Signal Double
 example = gain 1 (mempty +>
-          noteToSignal (Triplet
-              (quarter f)
-              (quarter a)
-              (quarter g)
-          ) 60 triangleWave)
+          noteToSignal (triplet quarter f a g) 60 triangleWave) +>
+          noteToSignal (duplet quarter a c) 60 sineWave
 
 main :: IO ()
 main = putWAVEFile "example.wav" (toWave audRate example)

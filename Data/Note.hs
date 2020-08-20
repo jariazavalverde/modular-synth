@@ -12,7 +12,8 @@ module Data.Note(
     quarter, crotchet, eighth, quaver, sixteenth, semiquaver, thirtySecond,
     demisemiquaver, sixtyFourth, hemidemisemiquaver, semidemisemiquaver,
     hundredTwentyEighth, semihemidemisemiquaver, quasihemidemisemiquaver,
-    twoHundredFiftySixth, demisemihemidemisemiquaver
+    twoHundredFiftySixth, demisemihemidemisemiquaver,
+    duplet, triplet
 ) where
 
 
@@ -30,6 +31,7 @@ type NoteValue = Double
 -- Notes can represent the pitch and duration of a sound in musical notation.
 data Note = Note NoteValue Frecuency
           | Dotted Int Note
+          | Duplet Note Note
           | Triplet Note Note Note
     deriving (Read, Show)
 
@@ -50,6 +52,9 @@ noteToSignal (Note v f) t u phi =
 noteToSignal (Dotted n (Note v f)) t u phi =
     let v' = v + v * ((2^n - 1) / 2^n)
     in noteToSignal (Note v' f) t u phi
+noteToSignal (Duplet a b) t u phi =
+    time' (3/2) (noteToSignal a t u phi) +>
+    time' (3/2) . noteToSignal b t u
 noteToSignal (Triplet a b c) t u phi =
     time' (2/3) (noteToSignal a t u phi) +>
     time' (2/3) . noteToSignal b t u +>
@@ -85,58 +90,65 @@ bflat = 466.16
 
 -- | COMMON NOTE VALUES
 
--- 4/4
+-- | 4/4
 n1, whole, semibreve :: Frecuency -> Note
 n1 = Note 1
 whole = Note 1
 semibreve = Note 1
 
--- 2/4
+-- | 2/4
 n2, half, minim :: Frecuency -> Note
 n2 = Note (1/2)
 half = Note (1/2)
 minim = Note (1/2)
 
--- 1/4
+-- | 1/4
 n4, quarter, crotchet :: Frecuency -> Note
 n4 = Note (1/4)
 quarter = Note (1/4)
 crotchet = Note (1/4)
 
--- 1/8
+-- | 1/8
 n8, eighth, quaver :: Frecuency -> Note
 n8 = Note (1/8)
 eighth = Note (1/8)
 quaver = Note (1/8)
 
--- 1/16
+-- | 1/16
 n16, sixteenth, semiquaver :: Frecuency -> Note
 n16 = Note (1/16)
 sixteenth = Note (1/16)
 semiquaver = Note (1/16)
 
--- 1/32
+-- | 1/32
 n32, thirtySecond, demisemiquaver :: Frecuency -> Note
 n32 = Note (1/32)
 thirtySecond = Note (1/32)
 demisemiquaver = Note (1/32)
 
--- 1/64
+-- | 1/64
 n64, sixtyFourth, hemidemisemiquaver, semidemisemiquaver :: Frecuency -> Note
 n64 = Note (1/64)
 sixtyFourth = Note (1/64)
 hemidemisemiquaver = Note (1/64)
 semidemisemiquaver = Note (1/64)
 
--- 1/128
+-- | 1/128
 n128, hundredTwentyEighth, semihemidemisemiquaver, quasihemidemisemiquaver :: Frecuency -> Note
 n128 = Note (1/128)
 hundredTwentyEighth = Note (1/128)
 semihemidemisemiquaver = Note (1/128)
 quasihemidemisemiquaver = Note (1/128)
 
--- 1/256
+-- | 1/256
 n256, twoHundredFiftySixth, demisemihemidemisemiquaver :: Frecuency -> Note
 n256 = Note (1/256)
 twoHundredFiftySixth = Note (1/256)
 demisemihemidemisemiquaver = Note (1/256)
+
+-- | Extra-metric groupings
+duplet :: (Frecuency -> Note) -> Frecuency -> Frecuency -> Note
+duplet f a b = Duplet (f a) (f b)
+
+triplet :: (Frecuency -> Note) -> Frecuency -> Frecuency -> Frecuency -> Note
+triplet f a b c = Triplet (f a) (f b) (f c)
