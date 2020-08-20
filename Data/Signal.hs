@@ -4,22 +4,16 @@ module Data.Signal(
     -- make waves
     sineWave, squareWave, triangleWave, sawWave,
     -- combinators
-    mapSignal, zipSignal, time, decay,
+    time, time', decay, gain, (+>),
     -- common sample rates
     ctrRate, audRate,
-    -- notes
-    zero,
-    c, d, e, f, g, a, b,
-    csharp, dsharp, fsharp, gsharp, asharp,
-    dflat, eflat, gflat, aflat, bflat,
     -- format
-    toWave
+    toWave, dropSamples
 ) where
 
 
 import Control.Applicative(liftA2)
 import Data.Semigroup(Semigroup(..))
-import Data.Function((&))
 import Data.WAVE(doubleToSample, WAVE(..), WAVEHeader(..))
 
 
@@ -44,9 +38,11 @@ type Frecuency = Double
 -- | Phase (in radians)
 -- The phase of a periodic function of some real variable (such as time) is an
 -- angle representing the number of periods spanned by that variable.
-type Phase = Double
+type Phase a = (a, Ordering)
 
--- | Time
+-- | Time (in seconds)
+-- The time is the measured or measurable period during which an action, process, or
+-- condition exists or continues.
 type Time = Double
 
 -- | Signal
@@ -85,10 +81,12 @@ instance Num a => Num (Signal a) where
 -- y(t) = A * sin(2*pi*f*t + phi)
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-sineWave :: Amplitude -> Phase -> Frecuency -> Signal Double
-sineWave a phi f = Signal (\rate ->
+sineWave :: Frecuency -> Phase Double -> Signal Double
+sineWave f phi = Signal (\rate ->
     let rate' = fromIntegral rate
-    in map (\t -> a * sin (2*pi*f*(t/rate') + phi)) [0..])
+        xs = map (\t -> sin (2*pi*f*(t/rate'))) [0..]
+    in if fst phi == 0 then xs else dropSamples phi xs)
+
 
 -- | squareWave
 -- A square wave is a non-sinusoidal periodic waveform in which the amplitude
@@ -99,10 +97,11 @@ sineWave a phi f = Signal (\rate ->
 -- y(t) = A * sgn(sin(2*pi*f*t + phi))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-squareWave :: Amplitude -> Phase -> Frecuency -> Signal Double
-squareWave a phi f = Signal (\rate ->
+squareWave :: Frecuency -> Phase Double -> Signal Double
+squareWave f phi = Signal (\rate ->
     let rate' = fromIntegral rate
-    in map (\t -> a * signum (sin (2*pi*f*(t/rate') + phi))) [0..])
+        xs = map (\t -> signum (sin (2*pi*f*(t/rate')))) [0..]
+    in if fst phi == 0 then xs else dropSamples phi xs)
 
 -- | triangleWave
 -- A triangle wave is a non-sinusoidal waveform named for its triangular shape.
@@ -112,10 +111,11 @@ squareWave a phi f = Signal (\rate ->
 -- y(t) = 2*A / pi * asin(sin(2*pi*f*t + phi))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-triangleWave :: Amplitude -> Phase -> Frecuency -> Signal Double
-triangleWave a phi f = Signal (\rate ->
+triangleWave :: Frecuency -> Phase Double -> Signal Double
+triangleWave f phi = Signal (\rate ->
     let rate' = fromIntegral rate
-    in map (\t -> (2*a / pi) * asin (sin (2*pi*f*(t/rate') + phi))) [0..])
+        xs = map (\t -> (2/pi) * asin (sin (2*pi*f*(t/rate')))) [0..]
+    in if fst phi == 0 then xs else dropSamples phi xs)
 
 -- | sawWave
 -- The sawtooth wave is a kind of non-sinusoidal waveform. The convention is
@@ -126,32 +126,53 @@ triangleWave a phi f = Signal (\rate ->
 -- y(t) = -2*A * ((t+phi)*f - floor(0.5+(t+phi)*f))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
-sawWave :: Amplitude -> Phase -> Frecuency -> Signal Double
-sawWave a phi f = Signal (\rate ->
+sawWave :: Frecuency -> Phase Double -> Signal Double
+sawWave f phi = Signal (\rate ->
     let rate' = fromIntegral rate
-    in map (\t -> 2 * a * (((t+phi)/rate')*f - fromIntegral(floor (0.5 + ((t+phi)/rate')*f)))) [0..])
+        xs = map (\t -> 2 * ((t/rate')*f - fromIntegral(floor (0.5 + (t/rate')*f)))) [0..]
+    in if fst phi == 0 then xs else dropSamples phi xs)
 
 
 -- | SIGNAL COMBINATORS
 
--- | mapSignal
--- Map the function of the signal.
-mapSignal :: (Rate -> [a] -> [b]) -> Signal a -> Signal b
-mapSignal g (Signal f) = Signal (\rate -> g rate (f rate))
-
 -- | time
 -- Take the first n seconds of a signal.
 time :: (Eq a, Num a) => Time -> Signal a -> Signal a
-time t = mapSignal (\rate -> takeZero (round (t * fromIntegral rate)))
+time t (Signal f) = Signal (\rate -> take (round (t * fromIntegral rate)) (f rate))
+
+-- | time'
+-- Take the first n % of a signal.
+time' :: (Eq a, Num a) => Time -> Signal a -> Signal a
+time' t (Signal f) = Signal (\rate -> let xs = f rate
+                                      in take (round (t * fromIntegral (length xs))) xs)
 
 -- | decay
--- Decay the signal the last n seconds.
+-- Decay the last seconds of a given signal.
 decay :: (Num a, Enum a, Fractional a) => Time -> Signal a -> Signal a
 decay t (Signal f) = Signal (\rate ->
     let xs = f rate
         m = round (t * fromIntegral rate)
         n = length xs - m
     in take n xs ++ zipWith (*) [1, 1-1/(fromIntegral m)..] (drop n xs))
+
+-- | gain
+-- Gain the first seconds of a given signal.
+gain :: (Num a, Enum a, Fractional a) => Time -> Signal a -> Signal a
+gain t (Signal f) = Signal (\rate ->
+    let xs = f rate
+        n = round (t * fromIntegral rate)
+    in zipWith (*) [0, 1/(fromIntegral n)..] (take n xs) ++ drop n xs)
+
+-- | (+>)
+-- Sequence two signals.
+infixl 1 +>
+(+>) :: (Ord a, Num a) => Signal a -> (Phase a -> Signal a) -> Signal a
+(Signal f) +> g = Signal (\rate ->
+    let xs = f rate
+        b = if null xs then 0 else last xs
+        a = if null (init xs) then 0 else last (init xs)
+        Signal h = g (b, compare a b)
+    in xs ++ h rate)
 
 
 -- | COMMON RATES
@@ -168,39 +189,6 @@ ctrRate = 4410
 -- used to reconstruct the audio signal when playing it back. 
 audRate :: Rate
 audRate = 44100
-
-
--- | MUSICAL NOTES
--- A note is a symbol denoting a musical sound.
--- Notes can represent the pitch and duration of a sound in musical notation.
-
--- | Empty sound.
-zero :: (Frecuency -> Signal a) -> Signal a
-zero = (&) 0
-
--- | 12 notes of a chromatic scale built on C.
-c, d, e, f, g, a, b :: (Frecuency -> Signal a) -> Signal a
-c = (&) 261.63
-d = (&) 293.66
-e = (&) 329.63
-f = (&) 349.23
-g = (&) 392.00
-a = (&) 440.00
-b = (&) 493.88
-
-csharp, dsharp, fsharp, gsharp, asharp :: (Frecuency -> Signal a) -> Signal a
-csharp = (&) 277.18
-dsharp = (&) 311.13
-fsharp = (&) 369.99
-gsharp = (&) 415.30
-asharp = (&) 466.16
-
-dflat, eflat, gflat, aflat, bflat :: (Frecuency -> Signal a) -> Signal a
-dflat = (&) 277.18
-eflat = (&) 311.13
-gflat = (&) 369.99
-aflat = (&) 415.30
-bflat = (&) 466.16
 
 
 -- | FORMAT AND EXPORT FUNCTIONS
@@ -220,11 +208,11 @@ toWave rate (Signal f) = let samples = f rate
 
 -- | AUXILIAR OPERATIONS (DO NOT EXPORT)
 
--- | takeZero
-takeZero :: (Eq a, Num a) => Int -> [a] -> [a]
-takeZero n xs = take (takeZero' n (drop n xs)) xs
-    where takeZero' n [] = n
-          takeZero' n [_] = n
-          takeZero' n (a:b:xs) = if a == 0 || signum a /= signum b
-                                 then n+1
-                                 else takeZero' (n+1) (b:xs)
+-- | dropSamples
+dropSamples :: (Eq a, Ord a) => Phase a -> [a] -> [a]
+dropSamples (phi,ord) (x:y:xs) = case ord of
+    LT -> if x <= phi && y > phi then y:xs else dropSamples (phi,ord) (y:xs)
+    GT -> if x > phi && y <= phi then y:xs else dropSamples (phi,ord) (y:xs)
+    EQ -> if x == phi || x < phi && y > phi || x > phi && y < phi
+          then y:xs
+          else dropSamples (phi,ord) (y:xs)
