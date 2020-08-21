@@ -1,10 +1,11 @@
 module Data.Signal(
     -- data types
     Rate, Amplitude, Frecuency, Phase, Time, Signal(..),
+    Attack, Decay, Sustain, Retain,
     -- make waves
     sineWave, squareWave, triangleWave, sawWave,
     -- combinators
-    time, time', decay, gain, (+>), join,
+    time, time', adsr, (+>), join, start,
     -- common sample rates
     ctrRate, audRate,
     -- format
@@ -44,6 +45,24 @@ type Phase a = (a, Ordering)
 -- The time is the measured or measurable period during which an action, process, or
 -- condition exists or continues.
 type Time = Double
+
+-- | Attack
+-- Attack is the time taken for initial run-up of level from nil to peak.
+type Attack = Double
+
+-- | Decay
+-- Decay is the time taken for the subsequent run down from the attack level to
+-- the designated sustain level.
+type Decay = Double
+
+-- | Sustain
+-- Sustain is the level during the main sequence of the sound's duration.
+type Sustain = Double
+
+-- | Release
+-- Release is the time taken for the level to decay from the sustain level to
+-- zero.
+type Retain = Double
 
 -- | Signal
 data Signal a = Signal { runSignal :: Rate -> [a] }
@@ -146,22 +165,25 @@ time' :: (Eq a, Num a) => Time -> Signal a -> Signal a
 time' t (Signal f) = Signal (\rate -> let xs = f rate
                                       in take (round (t * fromIntegral (length xs))) xs)
 
--- | decay
--- Decay the last seconds of a given signal.
-decay :: (Num a, Enum a, Fractional a) => Time -> Signal a -> Signal a
-decay t (Signal f) = Signal (\rate ->
+-- | adsr
+-- An envelope describes how a sound changes over time. The most common kind of
+-- envelope generator has four stages: attack, decay, sustain, and release.
+adsr :: Attack -> Decay -> Sustain -> Retain -> Signal Double -> Signal Double
+adsr a d s r (Signal f) =  Signal (\rate ->
     let xs = f rate
-        m = round (t * fromIntegral rate)
-        n = length xs - m
-    in take n xs ++ zipWith (*) [1, 1-1/(fromIntegral m)..] (drop n xs))
-
--- | gain
--- Gain the first seconds of a given signal.
-gain :: (Num a, Enum a, Fractional a) => Time -> Signal a -> Signal a
-gain t (Signal f) = Signal (\rate ->
-    let xs = f rate
-        n = round (t * fromIntegral rate)
-    in zipWith (*) [0, 1/(fromIntegral n)..] (take n xs) ++ drop n xs)
+        rate' = fromIntegral rate
+        n = round (a * rate')
+        m = round (d * rate')
+        o = round (r * rate')
+        p = length xs'' - o
+        xs' = drop n xs
+        xs'' = drop m xs'
+        xs''' = drop p xs''
+        as = zipWith (*) [0, 1/(fromIntegral n)..] (take n xs)
+        ds = zipWith (*) [1, 1-(1-s)/(fromIntegral m)..] (take m xs')
+        ss = zipWith (*) (repeat s) (take p xs'')
+        rs = zipWith (*) [s, s-s/(fromIntegral o)..] xs'''
+    in as ++ ds ++ ss ++ rs)
 
 -- | (+>)
 -- Sequence two signals.
@@ -174,9 +196,16 @@ infixl 1 +>
         Signal h = g (b, compare a b)
     in xs ++ h rate)
 
+-- | join
+-- Sequence a list fo signals.
 join :: (Ord a, Num a) => [Phase a -> Signal a] -> (Phase a -> Signal a)
 join [] _ = mempty
 join (x:xs) phi = x phi +> join xs
+
+-- | start
+--
+start :: (Ord a, Num a) => (Phase a -> Signal a) -> Signal a
+start = (+>) mempty
 
 
 -- | COMMON RATES

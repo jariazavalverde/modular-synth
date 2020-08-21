@@ -2,7 +2,7 @@ module Data.Note(
     -- data types
     Note(..), NoteValue, Tempo,
     -- operations
-    noteToSignal,
+    noteToSignal, makePiece,
     -- common note pitches
     c, d, e, f, g, a, b,
     c',
@@ -18,7 +18,7 @@ module Data.Note(
 ) where
 
 
-import Data.Signal(Signal(..), Frecuency, Phase, time, time', (+>))
+import Data.Signal(Signal(..), Frecuency, Phase, time, time', (+>), join)
 
 
 -- | DATA TYPES
@@ -46,20 +46,26 @@ data Note = Note NoteValue Frecuency
 -- | noteToSignal
 -- Given the tempo (in bps) and a signal constructor, generates a signal from
 -- a note.
-noteToSignal :: Note -> Tempo -> (Frecuency -> Phase Double -> Signal Double)
+noteToSignal :: Tempo -> (Frecuency -> Phase Double -> Signal Double) -> Note
     -> Phase Double -> Signal Double
-noteToSignal (Note v f) t u phi =
+noteToSignal t u (Note v f) phi =
     time (v * fromIntegral t / 60) (u f phi)
-noteToSignal (Dotted n (Note v f)) t u phi =
+noteToSignal t u (Dotted n (Note v f)) phi =
     let v' = v + v * ((2^n - 1) / 2^n)
-    in noteToSignal (Note v' f) t u phi
-noteToSignal (Duplet a b) t u phi =
-    time' (3/2) (noteToSignal a t u phi) +>
-    time' (3/2) . noteToSignal b t u
-noteToSignal (Triplet a b c) t u phi =
-    time' (2/3) (noteToSignal a t u phi) +>
-    time' (2/3) . noteToSignal b t u +>
-    time' (2/3) . noteToSignal c t u
+    in noteToSignal t u (Note v' f) phi
+noteToSignal t u (Duplet a b) phi =
+    time' (3/2) (noteToSignal t u a phi) +>
+    time' (3/2) . noteToSignal t u b
+noteToSignal t u (Triplet a b c) phi =
+    time' (2/3) (noteToSignal t u a phi) +>
+    time' (2/3) . noteToSignal t u b  +>
+    time' (2/3) . noteToSignal t u c
+
+-- | makePiece
+--
+makePiece :: Tempo -> (Frecuency -> Phase Double -> Signal Double) -> 
+    [Signal Double -> Signal Double] -> [Note] -> Phase Double -> Signal Double
+makePiece t u cs xs = join (map ((foldl (.) id (map (.) cs)) . (noteToSignal t u)) xs)
 
 
 

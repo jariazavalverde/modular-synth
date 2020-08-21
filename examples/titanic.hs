@@ -1,7 +1,6 @@
 import Data.WAVE(putWAVEFile)
 import Data.Signal
 import Data.Note
-import Data.Bar
 
 part1 = [
     half f, quarter f, quarter f,
@@ -34,10 +33,12 @@ part3 = [
     half a, half g,
     whole f]
 
+piece = part1 ++ part1 ++ part2 ++ part3
+
 titanic :: Signal Double
-titanic =
-    mempty +>
-    join (map ((.) (decay 0.2)) (barToSignals (part1 ++ part1 ++ part2 ++ part3) 140 sineWave))
+titanic = start $ makePiece 140 triangleWave [adsr 0.1 0.2 0.5 0.2] piece
+-- titanic = mempty +>
+--           join (map (((.) (adsr 0.1 0.2 0.5 0.2)) . (noteToSignal 140 triangleWave)) piece)
 
 main :: IO ()
 main = putWAVEFile "titanic.wav" (toWave audRate titanic)
