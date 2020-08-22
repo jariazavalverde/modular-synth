@@ -2,9 +2,10 @@ import Data.WAVE(putWAVEFile)
 import Data.Signal
 import Data.Note
 import Data.VCO
+import Data.VCA
 
-vco1 = VCO 1 1
-vco2 = VCO c (outSineVCO vco1)
+vco = VCO c (outSineVCO unitVCO)
+vca = VCA 1.0 (outSquareVCO unitVCO) (outSineVCO vco)
 
 main :: IO ()
-main = putWAVEFile "example.wav" (signalToWave audioRate 10 (outSineVCO vco2))
+main = putWAVEFile "example.wav" (signalToWave audioRate 10 (outSignalVCA vca))

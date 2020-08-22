@@ -32,6 +32,25 @@ instance Num a => Num (Signal a) where
     signum = mapSignal signum
     fromInteger = Signal . const . fromInteger
 
+instance Fractional a => Fractional (Signal a) where
+    (/) = zipSignal (/)
+    fromRational = Signal . const . fromRational
+
+instance Floating a => Floating (Signal a) where
+    pi = Signal (const pi)
+    exp = mapSignal exp
+    log = mapSignal log
+    sin = mapSignal sin
+    cos = mapSignal cos
+    asin = mapSignal asin
+    acos = mapSignal acos
+    atan = mapSignal atan
+    sinh = mapSignal sinh
+    cosh = mapSignal cosh
+    asinh = mapSignal asinh
+    acosh = mapSignal acosh
+    atanh = mapSignal atanh
+
 
 -- | SIGNAL COMBINATORS
 

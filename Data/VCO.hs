@@ -1,9 +1,14 @@
 module Data.VCO(
     -- data types
     VCO(..),
-    -- inputs (inVoltageVCO)
+    -- inputs
+    {-
+    inFrequencyVCO, inVoltageVCO,
+    -}
     -- outputs
-    outSineVCO, outSquareVCO, outTriangleVCO, outSawVCO
+    outSineVCO, outSquareVCO, outTriangleVCO, outSawVCO,
+    -- operations
+    unitVCO
 ) where
 
 
@@ -42,6 +47,14 @@ outSawVCO :: (Num a, Floating a, RealFrac a) => VCO a -> Signal a
 outSawVCO = saw <$> inFrequencyVCO <*> inVoltageVCO
 
 
+-- | OPERATIONS
+
+-- | unitVCO
+-- VCO with frequency 1 and continuous voltage 1.
+unitVCO :: Num a => VCO a
+unitVCO = VCO 1 1
+
+
 -- | SIGNALS
 
 -- | sine
@@ -53,7 +66,7 @@ outSawVCO = saw <$> inFrequencyVCO <*> inVoltageVCO
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
 sine :: (Num a, Floating a) => a -> Signal a -> Signal a
-sine p (Signal f) = Signal (\t -> sin (2*pi*f(t)*t*p))
+sine p (Signal f) = Signal (\t -> sin (2*pi*f t*t*p))
 
 -- | square
 -- A square wave is a non-sinusoidal periodic waveform in which the amplitude
@@ -65,7 +78,7 @@ sine p (Signal f) = Signal (\t -> sin (2*pi*f(t)*t*p))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
 square :: (Num a, Floating a) => a -> Signal a -> Signal a
-square p (Signal f) = Signal (\t -> signum (sin (2*pi*f(t)*t*p)))
+square p (Signal f) = Signal (\t -> signum (sin (2*pi*f t*t*p)))
 
 -- | triangle
 -- A triangle wave is a non-sinusoidal waveform named for its triangular shape.
@@ -76,7 +89,7 @@ square p (Signal f) = Signal (\t -> signum (sin (2*pi*f(t)*t*p)))
 --
 -- where A is the amplitude, f is the frecuency and phi is the phase.
 triangle :: (Num a, Floating a) => a -> Signal a -> Signal a
-triangle p (Signal f) = Signal (\t -> (2 / pi) * asin (sin (2*pi*f(t)*t*p)))
+triangle p (Signal f) = Signal (\t -> (2 / pi) * asin (sin (2*pi*f t*t*p)))
 
 -- | saw
 -- The sawtooth wave is a kind of non-sinusoidal waveform. The convention is
@@ -84,8 +97,8 @@ triangle p (Signal f) = Signal (\t -> (2 / pi) * asin (sin (2*pi*f(t)*t*p)))
 -- (or inverse) sawtooth wave, the wave ramps downward and then sharply rises.
 -- Its form as a function of time t is: 
 --
--- y(t) = -2*A * ((t+phi)*f - floor(0.5+(t+phi)*f))
+-- y(t) = -2*A * (t*f - floor(0.5+t*f))
 --
--- where A is the amplitude, f is the frecuency and phi is the phase.
+-- where A is the amplitude and f is the frecuency.
 saw :: (Num a, Floating a, RealFrac a) => a -> Signal a -> Signal a
-saw p (Signal f) = Signal (\t -> 2*t*f(t)*p - fromIntegral (floor (0.5+t*f(t)*p)))
+saw p (Signal f) = Signal (\t -> -2*(t*f t*p - fromIntegral (floor (0.5+t*f t*p))))
