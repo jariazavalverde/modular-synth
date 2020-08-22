@@ -1,8 +1,9 @@
 module Data.Note(
     -- data types
-    Note(..), NoteValue, Tempo,
+    Note(..), NoteValue, Pitch, Tempo,
     -- operations
-    noteToSignal, makePiece,
+    duration,
+    noteToSignal, noteToSignal0, notesToSignal, notesToSignal0,
     -- common note pitches
     c, d, e, f, g, a, b,
     c',
@@ -18,7 +19,7 @@ module Data.Note(
 ) where
 
 
-import Data.Signal(Signal(..), Frecuency, Phase, time, time', (+>), join)
+import Data.Signal(Signal(..))
 
 
 -- | DATA TYPES
@@ -27,51 +28,63 @@ import Data.Signal(Signal(..), Frecuency, Phase, time, time', (+>), join)
 -- The tempo is the speed or pace of a given piece.
 type Tempo = Int
 
--- | NoteValue
+-- | Note value
 -- A note value indicates the relative duration of a note.
 type NoteValue = Double
+
+-- | Pitch (in Hz)
+-- 
+type Pitch = Double
 
 -- | Note
 -- A note is a symbol denoting a musical sound.
 -- Notes can represent the pitch and duration of a sound in musical notation.
-data Note = Note NoteValue Frecuency
+data Note = Note NoteValue Pitch
           | Dotted Int Note
           | Duplet Note Note
           | Triplet Note Note Note
-    deriving (Read, Show, Eq, Ord)
+          deriving (Read, Show, Eq, Ord)
 
 
 -- | OPERATIONS
 
+-- | duration 
+-- Calculate the duration of a note.
+duration :: Tempo -> Note -> Double
+duration tempo (Note value _) = value * (60 / fromIntegral tempo)
+duration tempo (Dotted n note) = let d = duration tempo note
+                                 in d + d * ((2^n - 1) / 2^n)
+duration tempo (Duplet note _) = 3 * duration tempo note
+duration tempo (Triplet note _ _) = 2 * duration tempo note
+
 -- | noteToSignal
--- Given the tempo (in bps) and a signal constructor, generates a signal from
--- a note.
-noteToSignal :: Tempo -> (Frecuency -> Phase Double -> Signal Double) -> Note
-    -> Phase Double -> Signal Double
-noteToSignal t u (Note v f) phi =
-    time (v * fromIntegral t / 60) (u f phi)
-noteToSignal t u (Dotted n (Note v f)) phi =
-    let v' = v + v * ((2^n - 1) / 2^n)
-    in noteToSignal t u (Note v' f) phi
-noteToSignal t u (Duplet a b) phi =
-    time' (3/2) (noteToSignal t u a phi) +>
-    time' (3/2) . noteToSignal t u b
-noteToSignal t u (Triplet a b c) phi =
-    time' (2/3) (noteToSignal t u a phi) +>
-    time' (2/3) . noteToSignal t u b  +>
-    time' (2/3) . noteToSignal t u c
+-- Generate a signal from a note.
+noteToSignal :: Double -> Tempo -> Note -> Signal Double
+noteToSignal phi tempo note@(Note value pitch) = Signal (\t ->
+    if t >= phi && t <= phi + duration tempo note
+        then pitch
+        else 0)
 
--- | makePiece
---
-makePiece :: Tempo -> (Frecuency -> Phase Double -> Signal Double) -> 
-    [Signal Double -> Signal Double] -> [Note] -> Phase Double -> Signal Double
-makePiece t u cs xs = join (map ((foldl (.) id (map (.) cs)) . (noteToSignal t u)) xs)
+noteToSignal0 :: Tempo -> Note -> Signal Double
+noteToSignal0 = noteToSignal 0
 
+-- | notesToSignal
+-- Generate a signal from a list of notes.
+notesToSignal :: Double -> Tempo -> [Note] -> Signal Double
+notesToSignal _ _ [] = Signal $ const 0
+notesToSignal phi tempo ((Note value pitch):xs) = Signal (\t ->
+    let phi' = phi + value * (60 / fromIntegral tempo)
+    in if t >= phi && t <= phi'
+           then pitch
+           else runSignal (notesToSignal phi' tempo xs) t)
+
+notesToSignal0 :: Tempo -> [Note] -> Signal Double
+notesToSignal0 = notesToSignal 0
 
 
 -- | COMMON NOTE PITCHES
 
-c, d, e, f, g, a, b :: Frecuency
+c, d, e, f, g, a, b :: Pitch
 c = 261.63
 d = 293.66
 e = 329.63
@@ -80,17 +93,17 @@ g = 392.00
 a = 440.00
 b = 493.88
 
-c' :: Frecuency
+c' :: Pitch
 c' = 523.251
 
-csharp, dsharp, fsharp, gsharp, asharp :: Frecuency
+csharp, dsharp, fsharp, gsharp, asharp :: Pitch
 csharp = 277.18
 dsharp = 311.13
 fsharp = 369.99
 gsharp = 415.30
 asharp = 466.16
 
-dflat, eflat, gflat, aflat, bflat :: Frecuency
+dflat, eflat, gflat, aflat, bflat :: Pitch
 dflat = 277.18
 eflat = 311.13
 gflat = 369.99
@@ -101,57 +114,57 @@ bflat = 466.16
 -- | COMMON NOTE VALUES
 
 -- | 4/4
-n1, whole, semibreve :: Frecuency -> Note
+n1, whole, semibreve :: Pitch -> Note
 n1 = Note 1
 whole = Note 1
 semibreve = Note 1
 
 -- | 2/4
-n2, half, minim :: Frecuency -> Note
+n2, half, minim :: Pitch -> Note
 n2 = Note (1/2)
 half = Note (1/2)
 minim = Note (1/2)
 
 -- | 1/4
-n4, quarter, crotchet :: Frecuency -> Note
+n4, quarter, crotchet :: Pitch -> Note
 n4 = Note (1/4)
 quarter = Note (1/4)
 crotchet = Note (1/4)
 
 -- | 1/8
-n8, eighth, quaver :: Frecuency -> Note
+n8, eighth, quaver :: Pitch -> Note
 n8 = Note (1/8)
 eighth = Note (1/8)
 quaver = Note (1/8)
 
 -- | 1/16
-n16, sixteenth, semiquaver :: Frecuency -> Note
+n16, sixteenth, semiquaver :: Pitch -> Note
 n16 = Note (1/16)
 sixteenth = Note (1/16)
 semiquaver = Note (1/16)
 
 -- | 1/32
-n32, thirtySecond, demisemiquaver :: Frecuency -> Note
+n32, thirtySecond, demisemiquaver :: Pitch -> Note
 n32 = Note (1/32)
 thirtySecond = Note (1/32)
 demisemiquaver = Note (1/32)
 
 -- | 1/64
-n64, sixtyFourth, hemidemisemiquaver, semidemisemiquaver :: Frecuency -> Note
+n64, sixtyFourth, hemidemisemiquaver, semidemisemiquaver :: Pitch -> Note
 n64 = Note (1/64)
 sixtyFourth = Note (1/64)
 hemidemisemiquaver = Note (1/64)
 semidemisemiquaver = Note (1/64)
 
 -- | 1/128
-n128, hundredTwentyEighth, semihemidemisemiquaver, quasihemidemisemiquaver :: Frecuency -> Note
+n128, hundredTwentyEighth, semihemidemisemiquaver, quasihemidemisemiquaver :: Pitch -> Note
 n128 = Note (1/128)
 hundredTwentyEighth = Note (1/128)
 semihemidemisemiquaver = Note (1/128)
 quasihemidemisemiquaver = Note (1/128)
 
 -- | 1/256
-n256, twoHundredFiftySixth, demisemihemidemisemiquaver :: Frecuency -> Note
+n256, twoHundredFiftySixth, demisemihemidemisemiquaver :: Pitch -> Note
 n256 = Note (1/256)
 twoHundredFiftySixth = Note (1/256)
 demisemihemidemisemiquaver = Note (1/256)
@@ -160,8 +173,8 @@ dotted :: Int -> Note -> Note
 dotted = Dotted
 
 -- | Extra-metric groupings
-duplet :: (Frecuency -> Note) -> Frecuency -> Frecuency -> Note
+duplet :: (Pitch -> Note) -> Pitch -> Pitch -> Note
 duplet f a b = Duplet (f a) (f b)
 
-triplet :: (Frecuency -> Note) -> Frecuency -> Frecuency -> Frecuency -> Note
+triplet :: (Pitch -> Note) -> Pitch -> Pitch -> Pitch -> Note
 triplet f a b c = Triplet (f a) (f b) (f c)
