@@ -55,7 +55,7 @@ unitVCO :: Num a => VCO a
 unitVCO = VCO 1 1
 
 
--- | SIGNALS
+-- | SIGNALS (NOT EXPORTED)
 
 -- | sine
 -- A sine wave or sinusoid is a mathematical curve that describes a smooth

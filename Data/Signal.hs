@@ -84,10 +84,12 @@ audioRate = 44100
 --
 -- $ cabal install WAVE
 --
-signalToWave :: SampleRate -> Double -> Signal Double -> WAVE
+signalToWave ::
+    (Num a, RealFrac a, Fractional a, Real a, Enum a) =>
+    SampleRate -> a -> Signal a -> WAVE
 signalToWave r t (Signal f) = let r' = fromIntegral r
                                   len = floor (r' * t)
                                   xs = take len (map (f . (/ r')) [0..])
                                   header = WAVEHeader 1 r 32 (Just len)
-                                  body = map (pure . doubleToSample) xs
+                                  body = map (pure . doubleToSample . realToFrac) xs
                               in WAVE header body

@@ -6,7 +6,9 @@ module Data.VCA(
     inGainVCA, inVoltageVCA, inSignalVCA,
     -}
     -- outputs
-    outSignalVCA
+    outSignalVCA,
+    -- operations
+    vca
 ) where
 
 
@@ -27,6 +29,16 @@ data VCA a = VCA {
 
 
 -- | OUTPUTS
--- VCA has one output: the amplified signal.
+-- VCA has one output:
+--
+-- * the amplified signal.
 outSignalVCA :: Num a => VCA a -> Signal a
 outSignalVCA (VCA gain cv signal) = signal * cv * (Signal $ const gain)
+
+
+-- | OPERATIONS
+
+-- | vca
+-- Return the amplified signal.
+vca :: (Num a) => a -> Signal a -> Signal a -> Signal a
+vca gain cv signal = outSignalVCA (VCA gain cv signal)
